@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Avatar, Button, Grid, TextField } from "@material-ui/core";
 import {
   getAuth,
@@ -26,7 +26,7 @@ import {
 import moment from "moment";
 import { db } from "./firebase";
 import "firebase/auth";
-import { COLLECTION, INCORRECT_LOGIN } from "./constants";
+import { COLLECTION, EMAIL_IN_USE, INCORRECT_LOGIN, UPLOAD_IMAGE } from "./constants";
 function Login(props) {
   const [email, setEmail] = useState("");
   const [pwd, setPwd] = useState("");
@@ -35,25 +35,33 @@ function Login(props) {
   const [register, setRegister] = useState(false);
   const [img, setImg] = useState(null);
   const [error, setError] = useState("");
-
+  const [loading,setLoading] = useState(false)
+  useEffect(() => {
+    if(error)setError('');
+  }, [register])
+  
   const uploadImg = async () => {
-    if (img) {
-      const storage = getStorage();
-      const storageRef = ref(storage, name);
-      const uploadTask = uploadBytesResumable(storageRef, img);
-      uploadTask.on(
-        "state_changed",
-        (snap)=>{console.log('File uploaded')},
-        (error) => {
-          console.log("Error: ", error);
-        },
-        async () => {
-          await getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-            signupUser(downloadURL);
-          });
-        }
-      );
+    if (!img) {
+      setError(UPLOAD_IMAGE);
+      return;
     }
+    setLoading(true)
+    const storage = getStorage();
+    const storageRef = ref(storage, name);
+    const uploadTask = uploadBytesResumable(storageRef, img);
+    uploadTask.on(
+      "state_changed",
+      (snap) => {
+      },
+      (error) => {
+        console.log("Error: ", error);
+      },
+      async () => {
+        await getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
+          signupUser(downloadURL);
+        });
+      }
+    );
   };
   const signupUser = async (url) => {
     const auth = getAuth();
@@ -65,10 +73,8 @@ function Login(props) {
       image: url,
       date: date,
     };
-    await createUserWithEmailAndPassword(auth, email, pwd);
-    await setDoc(doc(db, COLLECTION, email), uploadData);
-    setRegister(false);
-    props?.setUser(uploadData);
+    await createUserWithEmailAndPassword(auth, email, pwd).then(async()=>{await setDoc(doc(db, COLLECTION, email), uploadData);
+    props?.setUser(uploadData);}).catch(err=>setError(EMAIL_IN_USE)).finally(setLoading(false));    
   };
   const getCurrentUser = async (email) => {
     const q = query(collection(db, COLLECTION), where("email", "==", email));
@@ -84,15 +90,18 @@ function Login(props) {
   };
   const authUser = async () => {
     const auth = getAuth();
-    const user = await signInWithEmailAndPassword(auth, email, pwd);
-    const userData = await getCurrentUser(user?._tokenResponse?.email).catch(
-      (err) => setError(INCORRECT_LOGIN)
+    setLoading(true);
+    const user = await signInWithEmailAndPassword(auth, email, pwd).catch(
+      err => setError(INCORRECT_LOGIN)
     );
+    
+    if(error){setLoading(false);return;}
+    const userData = await getCurrentUser(user?._tokenResponse?.email).then(setLoading(false));
     props?.setUser(userData);
   };
   const loginUser = () => {
     return (
-      <div className="loginForm login">
+      <div className='loginForm login'>
         <div className="mb0">Welcome back</div>
         <h2 className="font30">Login to your account</h2>
         <div className="mb11">Email</div>
@@ -117,7 +126,7 @@ function Login(props) {
         ></TextField>
         <Button
           variant="contained"
-          className="btn"
+          className={`btn ${loading && 'loading'}`}
           color="secondary"
           onClick={() => authUser()}
         >
@@ -135,6 +144,7 @@ function Login(props) {
     );
   };
   const handleImg = (e) => {
+    if(error===UPLOAD_IMAGE)setError('');
     if (e.target.files[0]) {
       setImg(e.target.files[0]);
     }
@@ -213,7 +223,7 @@ function Login(props) {
         ></TextField>
         <Button
           variant="contained"
-          className="btn"
+          className={`btn ${loading && 'loading'}`}
           color="secondary"
           onClick={() => uploadImg()}
         >
@@ -223,7 +233,7 @@ function Login(props) {
           Already have an account?{" "}
           <span className="link" onClick={() => setRegister(false)}>
             Login
-          </span>
+          </span>{error && <div className="error">{error}</div>}
         </div>
       </div>
     );

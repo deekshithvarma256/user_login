@@ -10,14 +10,14 @@ export const StyledApp = styled.div`
   margin: 0px;
   height: 100vh;
   cursor: default;
-  &.App {
-    // align: center;
-  }
 `;
 export const StyledLogin = styled(Grid)`
 align-items:center;
 justify-content: center;
 height:100vh;
+.btn.loading{
+  cursor:wait;
+}
 .loginImg{
   height:100%;
   min-width:50vw;
